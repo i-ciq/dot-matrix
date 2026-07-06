@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dot Matrix</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #090909;
+      --surface: #101010;
+      --surface2: #161616;
+      --border: #1f1f1f;
+      --border2: #2a2a2a;
+      --muted: #484848;
+      --subtle: #888;
+      --text: #d8d8d8;
+      --accent: #ffffff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 256px; min-width: 256px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+    }
+
+    .sidebar-header { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-title  { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; color: var(--accent); }
+    .sidebar-subtitle { color: var(--muted); font-size: 11px; margin-top: 3px; }
+
+    .sidebar-section { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+
+    .section-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.9px; color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* Upload */
+    .upload-zone {
+      border: 1.5px dashed var(--border2); border-radius: 8px;
+      padding: 18px 12px; text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s; position: relative; user-select: none;
+    }
+    .upload-zone:hover       { border-color: #3a3a3a; background: rgba(255,255,255,0.015); }
+    .upload-zone.drag-active { border-color: #666;    background: rgba(255,255,255,0.03);  }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; pointer-events: none; width: 100%; height: 100%;
+    }
+    .upload-icon  { margin-bottom: 7px; opacity: 0.35; }
+    .upload-label { font-size: 12px; color: var(--text); font-weight: 500; }
+    .upload-hint  { color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .filename-display {
+      margin-top: 10px; font-size: 11px; color: var(--subtle);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 15px;
+    }
+
+    /* Sliders */
+    .controls { display: flex; flex-direction: column; gap: 16px; }
+    .control-row { display: flex; flex-direction: column; gap: 7px; }
+    .control-header { display: flex; justify-content: space-between; align-items: baseline; }
+    .control-name { font-size: 12px; color: #bbb; font-weight: 500; }
+    .control-val {
+      font-size: 11px; color: var(--subtle);
+      font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
+      min-width: 36px; text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 3px; background: var(--border2);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 13px; height: 13px;
+      border-radius: 50%; background: #d0d0d0; cursor: pointer;
+      transition: background 0.1s, transform 0.1s;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb { background: #fff; transform: scale(1.1); }
+    input[type="range"]::-moz-range-thumb {
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #d0d0d0; cursor: pointer; border: none;
+    }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; padding-top: 2px;
+    }
+    .toggle-name { font-size: 12px; color: #bbb; font-weight: 500; user-select: none; }
+    .toggle { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0; background: var(--border2);
+      border-radius: 10px; cursor: pointer; transition: background 0.18s;
+    }
+    .toggle-track::before {
+      content: ''; position: absolute;
+      width: 13px; height: 13px; left: 3px; top: 3px;
+      background: #666; border-radius: 50%; transition: transform 0.18s, background 0.18s;
+    }
+    .toggle input:checked + .toggle-track          { background: #383838; }
+    .toggle input:checked + .toggle-track::before  { transform: translateX(15px); background: #e0e0e0; }
+
+    /* Segmented button groups */
+    .rotate-group, .shape-group, .flip-group, .pg-group { display: flex; gap: 6px; }
+    .rotate-btn, .shape-btn, .flip-btn, .pg-btn {
+      flex: 1; padding: 6px 2px;
+      background: var(--surface2); color: var(--muted);
+      border: 1px solid var(--border2); border-radius: 5px;
+      font-size: 11px; font-weight: 500; cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .rotate-btn:hover,  .shape-btn:hover,  .flip-btn:hover,  .pg-btn:hover  { background: #1e1e1e; color: #ccc; border-color: #3a3a3a; }
+    .rotate-btn.active, .shape-btn.active, .flip-btn.active, .pg-btn.active { background: #222; color: #e0e0e0; border-color: #484848; }
+
+    /* Background */
+    .bg-row { display: flex; align-items: center; gap: 6px; }
+    .bg-preset {
+      width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0;
+      border: 1.5px solid var(--border2); cursor: pointer;
+      transition: border-color 0.12s, transform 0.1s;
+    }
+    .bg-preset:hover  { border-color: #555; transform: scale(1.06); }
+    .bg-preset.active { border-color: #888; }
+    .bg-trans {
+      background: repeating-conic-gradient(#2a2a2a 0% 25%, #111 0% 50%) 0 0 / 8px 8px;
+    }
+    .color-wrap {
+      flex: 1; position: relative; cursor: pointer; height: 22px;
+      border-radius: 4px; overflow: hidden; border: 1.5px solid var(--border2);
+      transition: border-color 0.12s;
+    }
+    .color-wrap:hover  { border-color: #555; }
+    .color-wrap.active { border-color: #888; }
+    .color-wrap input[type="color"] {
+      position: absolute; inset: 0; width: 200%; height: 200%;
+      opacity: 0; cursor: pointer; transform: translate(-25%, -25%);
+    }
+    .color-swatch { display: block; width: 100%; height: 100%; }
+
+    /* Dimension inputs */
+    .dim-group { display: flex; align-items: center; gap: 6px; }
+    .dim-field { display: flex; align-items: center; gap: 5px; flex: 1; }
+    .dim-label { font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; width: 12px; }
+    .dim-input {
+      width: 100%; padding: 5px 8px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border2); border-radius: 5px;
+      font-size: 12px; outline: none; -moz-appearance: textfield;
+    }
+    .dim-input::-webkit-inner-spin-button,
+    .dim-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .dim-input:focus { border-color: #3a3a3a; }
+    .lock-btn {
+      width: 22px; height: 22px; flex-shrink: 0; padding: 0;
+      background: transparent; border: 1px solid var(--border2);
+      border-radius: 4px; cursor: pointer; color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.12s, color 0.12s;
+    }
+    .lock-btn:hover  { border-color: #3a3a3a; color: #aaa; }
+    .lock-btn.locked { border-color: #555; color: #ccc; }
+
+    /* Footer */
+    .sidebar-footer { padding: 16px 18px; margin-top: auto; }
+    .stat-row {
+      display: flex; justify-content: space-between;
+      margin-bottom: 12px; font-size: 11px; color: var(--muted);
+    }
+    .stat-val { color: var(--subtle); font-variant-numeric: tabular-nums; }
+    .export-group { display: flex; flex-direction: column; gap: 8px; }
+    .export-btn {
+      width: 100%; padding: 9px 12px; border: none; border-radius: 6px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      letter-spacing: -0.2px; transition: background 0.12s, color 0.12s;
+    }
+    .export-btn-primary { background: #e2e2e2; color: #000; }
+    .export-btn-primary:hover:not(:disabled)  { background: #fff; }
+    .export-btn-primary:active:not(:disabled) { background: #ccc; }
+    .export-btn-secondary { background: var(--surface2); color: #aaa; border: 1px solid var(--border2); }
+    .export-btn-secondary:hover:not(:disabled)  { background: #1e1e1e; color: #ddd; border-color: #3a3a3a; }
+    .export-btn-secondary:active:not(:disabled) { background: #252525; }
+    .export-btn:disabled {
+      background: var(--surface2) !important; color: var(--muted) !important;
+      border-color: transparent !important; cursor: not-allowed;
+    }
+
+    /* Main */
+    .main {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden; position: relative;
+    }
+    .canvas-scroll {
+      flex: 1; overflow: auto; display: flex; padding: 24px;
+    }
+    .canvas-scroll.transparent-bg {
+      background-image: repeating-conic-gradient(#1c1c1c 0% 25%, #111 0% 50%);
+      background-size: 14px 14px;
+    }
+    #previewCanvas {
+      display: none; border-radius: 3px;
+      max-width: 100%; max-height: 100%;
+      flex-shrink: 0; margin: auto;
+    }
+    .empty-state {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; pointer-events: none; user-select: none;
+    }
+    .empty-dot-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; opacity: 0.15; }
+    .empty-dot  { border-radius: 50%; background: #fff; }
+    .empty-text { font-size: 13px; color: #333; }
+    .processing {
+      position: absolute; inset: 0; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(9,9,9,0.6); font-size: 12px; color: var(--muted); letter-spacing: 0.3px;
+      z-index: 5;
+    }
+    .processing.visible { display: flex; }
+
+    /* Zoom bar */
+    .zoom-bar {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: none; align-items: center; gap: 2px;
+      background: rgba(10,10,10,0.88); border: 1px solid var(--border2);
+      border-radius: 20px; padding: 3px 6px;
+      backdrop-filter: blur(6px); z-index: 10;
+    }
+    .zoom-bar.visible { display: flex; }
+    .zoom-btn {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: transparent; color: var(--subtle);
+      border: none; font-size: 15px; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.1s, color 0.1s;
+    }
+    .zoom-btn:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+    .zoom-level {
+      font-size: 11px; color: var(--subtle); font-variant-numeric: tabular-nums;
+      min-width: 34px; text-align: center; cursor: pointer; user-select: none; padding: 0 2px;
+      transition: color 0.1s;
+    }
+    .zoom-level:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">Dot Matrix</div>
+    <div class="sidebar-subtitle">Image to circle grid renderer</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-label">Image</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="upload-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8"  cy="8"  r="2.5" fill="white"/>
+          <circle cx="14" cy="8"  r="3.5" fill="white"/>
+          <circle cx="20" cy="8"  r="2"   fill="white"/>
+          <circle cx="8"  cy="14" r="3.5" fill="white"/>
+          <circle cx="14" cy="14" r="4.5" fill="white"/>
+          <circle cx="20" cy="14" r="3"   fill="white"/>
+          <circle cx="8"  cy="20" r="2"   fill="white"/>
+          <circle cx="14" cy="20" r="3"   fill="white"/>
+          <circle cx="20" cy="20" r="1.5" fill="white"/>
+        </svg>
+      </div>
+      <div class="upload-label">Drop image here</div>
+      <div class="upload-hint">or click to browse</div>
+    </div>
+    <div class="filename-display" id="filenameDisplay"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-label">Parameters</div>
+    <div class="controls">
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Grid Size</span>
+          <span class="control-val" id="gridSizeVal">12 px</span>
+        </div>
+        <input type="range" id="gridSize" min="4" max="40" value="12" step="1">
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Dot Fill</span>
+          <span class="control-val" id="dotFillVal">0.85</span>
+        </div>
+        <input type="range" id="dotFill" min="0.1" max="1.0" value="0.85" step="0.01">
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Brightness</span>
+          <span class="control-val" id="brightnessVal">100%</span>
+        </div>
+        <input type="range" id="brightnessSlider" min="20" max="200" value="100" step="1">
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Contrast</span>
+          <span class="control-val" id="contrastVal">100%</span>
+        </div>
+        <input type="range" id="contrastSlider" min="20" max="200" value="100" step="1">
+      </div>
+
+      <label class="toggle-row">
+        <span class="toggle-name">Gradient Dots</span>
+        <div class="toggle">
+          <input type="checkbox" id="toggleGradient">
+          <span class="toggle-track"></span>
+        </div>
+      </label>
+
+      <label class="toggle-row">
+        <span class="toggle-name">Grayscale</span>
+        <div class="toggle">
+          <input type="checkbox" id="toggleGrayscale">
+          <span class="toggle-track"></span>
+        </div>
+      </label>
+
+      <label class="toggle-row">
+        <span class="toggle-name">Stagger Rows</span>
+        <div class="toggle">
+          <input type="checkbox" id="toggleStagger">
+          <span class="toggle-track"></span>
+        </div>
+      </label>
+
+      <label class="toggle-row">
+        <span class="toggle-name">Photo Grid</span>
+        <div class="toggle">
+          <input type="checkbox" id="togglePhotoGrid">
+          <span class="toggle-track"></span>
+        </div>
+      </label>
+
+      <div id="photoGridControls" style="display:none; flex-direction:column; gap:14px;">
+        <div class="control-row">
+          <div class="control-header">
+            <span class="control-name">Direction</span>
+          </div>
+          <div class="pg-group">
+            <button class="pg-btn active" data-pgdir="horizontal">Horizontal</button>
+            <button class="pg-btn"        data-pgdir="vertical">Vertical</button>
+          </div>
+        </div>
+        <div class="control-row">
+          <div class="control-header">
+            <span class="control-name">Sort By</span>
+          </div>
+          <div class="pg-group">
+            <button class="pg-btn active" data-pgby="brightness">Bright</button>
+            <button class="pg-btn"        data-pgby="hue">Hue</button>
+            <button class="pg-btn"        data-pgby="saturation">Sat</button>
+          </div>
+        </div>
+        <div class="control-row">
+          <div class="control-header">
+            <span class="control-name">Threshold Low</span>
+            <span class="control-val" id="pgThreshLowVal">30</span>
+          </div>
+          <input type="range" id="pgThreshLowSlider" min="0" max="255" value="30" step="1">
+        </div>
+        <div class="control-row">
+          <div class="control-header">
+            <span class="control-name">Threshold High</span>
+            <span class="control-val" id="pgThreshHighVal">220</span>
+          </div>
+          <input type="range" id="pgThreshHighSlider" min="0" max="255" value="220" step="1">
+        </div>
+        <div class="control-row">
+          <div class="control-header">
+            <span class="control-name">Line Opacity</span>
+            <span class="control-val" id="photoGridLineOpacityVal">60%</span>
+          </div>
+          <input type="range" id="photoGridLineOpacitySlider" min="0" max="100" value="60" step="1">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Shape</span>
+        </div>
+        <div class="shape-group">
+          <button class="shape-btn active" data-shape="circle">Circle</button>
+          <button class="shape-btn" data-shape="square">Square</button>
+          <button class="shape-btn" data-shape="diamond">Diamond</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-label">Transform</div>
+    <div class="controls">
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Rotate</span>
+        </div>
+        <div class="rotate-group">
+          <button class="rotate-btn active" data-deg="0">0°</button>
+          <button class="rotate-btn" data-deg="90">90°</button>
+          <button class="rotate-btn" data-deg="180">180°</button>
+          <button class="rotate-btn" data-deg="270">270°</button>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Flip</span>
+        </div>
+        <div class="flip-group">
+          <button class="flip-btn" id="flipHBtn">Horizontal</button>
+          <button class="flip-btn" id="flipVBtn">Vertical</button>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Extend</span>
+          <span class="control-val" id="extendVal">0 cells</span>
+        </div>
+        <input type="range" id="extendRange" min="0" max="30" value="0" step="1">
+      </div>
+
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-label">Appearance</div>
+    <div class="controls">
+      <div class="control-row">
+        <div class="control-header">
+          <span class="control-name">Background</span>
+        </div>
+        <div class="bg-row">
+          <button class="bg-preset active" id="bgPresetDark"  style="background:#090909" title="Dark"></button>
+          <button class="bg-preset"        id="bgPresetLight" style="background:#ffffff" title="Light"></button>
+          <button class="bg-preset bg-trans" id="bgPresetTrans" title="Transparent"></button>
+          <label class="color-wrap" id="bgColorWrap" title="Custom color">
+            <input type="color" id="bgColorInput" value="#090909">
+            <span class="color-swatch" id="bgColorSwatch" style="background:#090909"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-label">Output Size</div>
+    <div class="dim-group">
+      <div class="dim-field">
+        <label class="dim-label">W</label>
+        <input type="number" id="targetW" class="dim-input" placeholder="Auto" min="50" max="4000">
+      </div>
+      <button class="lock-btn" id="lockAspectBtn" title="Lock aspect ratio">
+        <svg width="10" height="12" viewBox="0 0 10 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="6" width="8" height="5.5" rx="1"/>
+          <path id="lockShackle" d="M3 6V3.5A2 2 0 0 1 7 3.5V2"/>
+        </svg>
+      </button>
+      <div class="dim-field">
+        <label class="dim-label">H</label>
+        <input type="number" id="targetH" class="dim-input" placeholder="Auto" min="50" max="4000">
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="stat-row">
+      <span>Dots rendered</span>
+      <span class="stat-val" id="dotCount">—</span>
+    </div>
+    <div class="export-group">
+      <button class="export-btn export-btn-primary"   id="exportSvgBtn" disabled>Export SVG</button>
+      <button class="export-btn export-btn-secondary" id="exportPngBtn" disabled>Export PNG</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-dot-grid" id="emptyDotGrid"></div>
+    <div class="empty-text">Upload an image to begin</div>
+  </div>
+  <div class="canvas-scroll" id="canvasScroll">
+    <canvas id="previewCanvas"></canvas>
+  </div>
+  <div class="processing" id="processingOverlay">Processing…</div>
+  <div class="zoom-bar" id="zoomBar">
+    <button class="zoom-btn" id="zoomOutBtn">−</button>
+    <span class="zoom-level" id="zoomLevelEl" title="Click to reset to fit">Fit</span>
+    <button class="zoom-btn" id="zoomInBtn">+</button>
+  </div>
+</div>
+
+<canvas id="hiddenCanvas" style="display:none;"></canvas>
+
+<script>
+  /* ── Refs ─────────────────────────────────────────────── */
+  const fileInput         = document.getElementById('fileInput');
+  const uploadZone        = document.getElementById('uploadZone');
+  const filenameDisplay   = document.getElementById('filenameDisplay');
+  const gridSizeSlider    = document.getElementById('gridSize');
+  const dotFillSlider     = document.getElementById('dotFill');
+  const gridSizeVal       = document.getElementById('gridSizeVal');
+  const dotFillVal        = document.getElementById('dotFillVal');
+  const brightnessSlider  = document.getElementById('brightnessSlider');
+  const contrastSlider    = document.getElementById('contrastSlider');
+  const brightnessValEl   = document.getElementById('brightnessVal');
+  const contrastValEl     = document.getElementById('contrastVal');
+  const toggleGradient    = document.getElementById('toggleGradient');
+  const toggleGrayscale   = document.getElementById('toggleGrayscale');
+  const toggleStagger     = document.getElementById('toggleStagger');
+  const flipHBtn          = document.getElementById('flipHBtn');
+  const flipVBtn          = document.getElementById('flipVBtn');
+  const extendSlider      = document.getElementById('extendRange');
+  const extendValEl       = document.getElementById('extendVal');
+  const bgPresetDark      = document.getElementById('bgPresetDark');
+  const bgPresetLight     = document.getElementById('bgPresetLight');
+  const bgPresetTrans     = document.getElementById('bgPresetTrans');
+  const bgColorInput      = document.getElementById('bgColorInput');
+  const bgColorSwatch     = document.getElementById('bgColorSwatch');
+  const bgColorWrap       = document.getElementById('bgColorWrap');
+  const targetWInput      = document.getElementById('targetW');
+  const targetHInput      = document.getElementById('targetH');
+  const lockAspectBtn     = document.getElementById('lockAspectBtn');
+  const lockShackle       = document.getElementById('lockShackle');
+  const exportSvgBtn      = document.getElementById('exportSvgBtn');
+  const exportPngBtn      = document.getElementById('exportPngBtn');
+  const previewCanvas     = document.getElementById('previewCanvas');
+  const hiddenCanvas      = document.getElementById('hiddenCanvas');
+  const emptyState        = document.getElementById('emptyState');
+  const processingOverlay = document.getElementById('processingOverlay');
+  const dotCountEl        = document.getElementById('dotCount');
+  const canvasScroll      = document.getElementById('canvasScroll');
+  const zoomBar           = document.getElementById('zoomBar');
+  const zoomInBtn                  = document.getElementById('zoomInBtn');
+  const zoomOutBtn                 = document.getElementById('zoomOutBtn');
+  const zoomLevelEl                = document.getElementById('zoomLevelEl');
+  const togglePhotoGrid            = document.getElementById('togglePhotoGrid');
+  const photoGridControls          = document.getElementById('photoGridControls');
+  const photoGridLineOpacitySlider = document.getElementById('photoGridLineOpacitySlider');
+  const photoGridLineOpacityVal    = document.getElementById('photoGridLineOpacityVal');
+  const pgThreshLowSlider          = document.getElementById('pgThreshLowSlider');
+  const pgThreshLowValEl           = document.getElementById('pgThreshLowVal');
+  const pgThreshHighSlider         = document.getElementById('pgThreshHighSlider');
+  const pgThreshHighValEl          = document.getElementById('pgThreshHighVal');
+
+  /* ── State ────────────────────────────────────────────── */
+  let currentImage  = null;
+  let lastDotData   = null;
+  let renderTimer   = null;
+  let isGradient    = false;
+  let rotationDeg   = 0;
+  let flipH         = false;
+  let flipV         = false;
+  let extendCells   = 0;
+  let targetW       = 0;
+  let targetH       = 0;
+  let viewZoom      = 0;
+  let brightness    = 100;
+  let contrast      = 100;
+  let grayscale     = false;
+  let dotShape      = 'circle';
+  let staggerRows   = false;
+  let bgColor              = '#090909';
+  let bgTransparent        = false;
+  let aspectLocked         = false;
+  let isPhotoGrid          = false;
+  let photoGridLineOpacity = 0.6;
+  let lastProcessedCanvas  = null;
+  let pgSortDir            = 'horizontal';
+  let pgSortBy             = 'brightness';
+  let pgThreshLow          = 30;
+  let pgThreshHigh         = 220;
+
+  /* ── Decorative empty grid ────────────────────────────── */
+  (function () {
+    const el = document.getElementById('emptyDotGrid');
+    [8,12,6,10,4,14,18,10,14,8,10,14,20,16,10,6,10,14,10,6,4,8,10,8,4].forEach(s => {
+      const d = document.createElement('div');
+      d.className = 'empty-dot';
+      d.style.width = d.style.height = s + 'px';
+      el.appendChild(d);
+    });
+  })();
+
+  /* ── Upload ───────────────────────────────────────────── */
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault(); e.stopPropagation();
+    uploadZone.classList.add('drag-active');
+  });
+  uploadZone.addEventListener('dragleave', e => {
+    if (!uploadZone.contains(e.relatedTarget)) uploadZone.classList.remove('drag-active');
+  });
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    uploadZone.classList.remove('drag-active');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) loadFile(f);
+  });
+  uploadZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+  function loadFile(file) {
+    filenameDisplay.textContent = file.name;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload  = () => { currentImage = img; URL.revokeObjectURL(url); scheduleRender(); };
+    img.onerror = () => { URL.revokeObjectURL(url); filenameDisplay.textContent = 'Could not load image.'; };
+    img.src = url;
+  }
+
+  /* ── Parameter controls ───────────────────────────────── */
+  gridSizeSlider.addEventListener('input', () => {
+    gridSizeVal.textContent = gridSizeSlider.value + ' px';
+    scheduleRender();
+  });
+  dotFillSlider.addEventListener('input', () => {
+    dotFillVal.textContent = parseFloat(dotFillSlider.value).toFixed(2);
+    scheduleRender();
+  });
+  brightnessSlider.addEventListener('input', () => {
+    brightness = parseInt(brightnessSlider.value);
+    brightnessValEl.textContent = brightness + '%';
+    scheduleRender();
+  });
+  contrastSlider.addEventListener('input', () => {
+    contrast = parseInt(contrastSlider.value);
+    contrastValEl.textContent = contrast + '%';
+    scheduleRender();
+  });
+  toggleGradient.addEventListener('change', () => {
+    isGradient = toggleGradient.checked;
+    if (lastDotData && !isPhotoGrid) { renderToCanvas(lastDotData); applyZoom(); }
+  });
+  toggleGrayscale.addEventListener('change', () => {
+    grayscale = toggleGrayscale.checked;
+    scheduleRender();
+  });
+  toggleStagger.addEventListener('change', () => {
+    staggerRows = toggleStagger.checked;
+    scheduleRender();
+  });
+
+  togglePhotoGrid.addEventListener('change', () => {
+    isPhotoGrid = togglePhotoGrid.checked;
+    photoGridControls.style.display = isPhotoGrid ? 'flex' : 'none';
+    exportSvgBtn.disabled = isPhotoGrid;
+    if (currentImage) scheduleRender();
+  });
+  photoGridLineOpacitySlider.addEventListener('input', () => {
+    photoGridLineOpacity = parseInt(photoGridLineOpacitySlider.value) / 100;
+    photoGridLineOpacityVal.textContent = photoGridLineOpacitySlider.value + '%';
+    if (lastDotData && isPhotoGrid) { renderToCanvas(lastDotData); applyZoom(); }
+  });
+
+  document.querySelectorAll('[data-pgdir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pgSortDir = btn.dataset.pgdir;
+      document.querySelectorAll('[data-pgdir]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (isPhotoGrid) scheduleRender();
+    });
+  });
+  document.querySelectorAll('[data-pgby]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pgSortBy = btn.dataset.pgby;
+      document.querySelectorAll('[data-pgby]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (isPhotoGrid) scheduleRender();
+    });
+  });
+  pgThreshLowSlider.addEventListener('input', () => {
+    pgThreshLow = parseInt(pgThreshLowSlider.value);
+    pgThreshLowValEl.textContent = pgThreshLow;
+    if (isPhotoGrid) scheduleRender();
+  });
+  pgThreshHighSlider.addEventListener('input', () => {
+    pgThreshHigh = parseInt(pgThreshHighSlider.value);
+    pgThreshHighValEl.textContent = pgThreshHigh;
+    if (isPhotoGrid) scheduleRender();
+  });
+
+  document.querySelectorAll('.shape-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      dotShape = btn.dataset.shape;
+      document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (lastDotData) { renderToCanvas(lastDotData); applyZoom(); }
+    });
+  });
+
+  /* ── Transform controls ───────────────────────────────── */
+  document.querySelectorAll('.rotate-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      rotationDeg = parseInt(btn.dataset.deg);
+      document.querySelectorAll('.rotate-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduleRender();
+    });
+  });
+
+  flipHBtn.addEventListener('click', () => {
+    flipH = !flipH;
+    flipHBtn.classList.toggle('active', flipH);
+    scheduleRender();
+  });
+  flipVBtn.addEventListener('click', () => {
+    flipV = !flipV;
+    flipVBtn.classList.toggle('active', flipV);
+    scheduleRender();
+  });
+
+  extendSlider.addEventListener('input', () => {
+    extendCells = parseInt(extendSlider.value);
+    extendValEl.textContent = extendCells === 0 ? '0 cells' : extendCells + ' cells';
+    scheduleRender();
+  });
+
+  /* ── Background ───────────────────────────────────────── */
+  function setBg(color, transparent) {
+    bgColor       = color;
+    bgTransparent = transparent;
+
+    bgPresetDark.classList.toggle('active',  !transparent && color === '#090909');
+    bgPresetLight.classList.toggle('active', !transparent && color === '#ffffff');
+    bgPresetTrans.classList.toggle('active', transparent);
+    bgColorWrap.classList.toggle('active',   !transparent && color !== '#090909' && color !== '#ffffff');
+
+    if (!transparent) {
+      bgColorInput.value             = color;
+      bgColorSwatch.style.background = color;
+    }
+    canvasScroll.classList.toggle('transparent-bg', transparent);
+    if (lastDotData) { renderToCanvas(lastDotData); applyZoom(); }
+  }
+
+  bgPresetDark.addEventListener('click',  () => setBg('#090909', false));
+  bgPresetLight.addEventListener('click', () => setBg('#ffffff', false));
+  bgPresetTrans.addEventListener('click', () => setBg(bgColor, !bgTransparent));
+  bgColorInput.addEventListener('input', e => setBg(e.target.value, false));
+
+  /* ── Aspect lock ──────────────────────────────────────── */
+  function getEffectiveAspect() {
+    if (!currentImage) return 1;
+    const rotated = (rotationDeg === 90 || rotationDeg === 270);
+    return rotated
+      ? currentImage.naturalHeight / currentImage.naturalWidth
+      : currentImage.naturalWidth  / currentImage.naturalHeight;
+  }
+
+  lockAspectBtn.addEventListener('click', () => {
+    aspectLocked = !aspectLocked;
+    lockAspectBtn.classList.toggle('locked', aspectLocked);
+    lockShackle.setAttribute('d', aspectLocked
+      ? 'M3 6V3.5A2 2 0 0 1 7 3.5V6'
+      : 'M3 6V3.5A2 2 0 0 1 7 3.5V2'
+    );
+  });
+
+  targetWInput.addEventListener('input', () => {
+    targetW = parseInt(targetWInput.value) || 0;
+    if (aspectLocked && targetW > 0) {
+      targetH = Math.round(targetW / getEffectiveAspect());
+      targetHInput.value = targetH || '';
+    }
+    scheduleRender();
+  });
+  targetHInput.addEventListener('input', () => {
+    targetH = parseInt(targetHInput.value) || 0;
+    if (aspectLocked && targetH > 0) {
+      targetW = Math.round(targetH * getEffectiveAspect());
+      targetWInput.value = targetW || '';
+    }
+    scheduleRender();
+  });
+
+  /* ── Zoom ─────────────────────────────────────────────── */
+  function getFitZoom() {
+    if (!lastDotData) return 1;
+    const r = canvasScroll.getBoundingClientRect();
+    return Math.min((r.width - 48) / lastDotData.width, (r.height - 48) / lastDotData.height);
+  }
+
+  function applyZoom() {
+    if (!lastDotData) return;
+    const { width, height } = lastDotData;
+    if (viewZoom === 0) {
+      previewCanvas.style.width     = '';
+      previewCanvas.style.height    = '';
+      previewCanvas.style.maxWidth  = '';
+      previewCanvas.style.maxHeight = '';
+      zoomLevelEl.textContent = 'Fit';
+    } else {
+      previewCanvas.style.maxWidth  = 'none';
+      previewCanvas.style.maxHeight = 'none';
+      previewCanvas.style.width     = Math.round(width  * viewZoom) + 'px';
+      previewCanvas.style.height    = Math.round(height * viewZoom) + 'px';
+      zoomLevelEl.textContent = Math.round(viewZoom * 100) + '%';
+    }
+  }
+
+  canvasScroll.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (!lastDotData) return;
+    if (viewZoom === 0) viewZoom = getFitZoom();
+    viewZoom = Math.max(0.05, Math.min(16, viewZoom * (e.deltaY < 0 ? 1.03 : 1 / 1.03)));
+    applyZoom();
+  }, { passive: false });
+
+  zoomInBtn.addEventListener('click',   () => { if (!lastDotData) return; if (viewZoom === 0) viewZoom = getFitZoom(); viewZoom = Math.min(16, viewZoom * 1.25); applyZoom(); });
+  zoomOutBtn.addEventListener('click',  () => { if (!lastDotData) return; if (viewZoom === 0) viewZoom = getFitZoom(); viewZoom = Math.max(0.05, viewZoom / 1.25); applyZoom(); });
+  zoomLevelEl.addEventListener('click', () => { viewZoom = 0; applyZoom(); });
+
+  /* ── Pipeline ─────────────────────────────────────────── */
+  function scheduleRender() {
+    if (!currentImage) return;
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(processAndRender, 150);
+  }
+
+  function processAndRender() {
+    if (!currentImage) return;
+    processingOverlay.classList.add('visible');
+    // Double rAF: first lets the overlay paint, second does the heavy work.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const dotData = calculateDots();
+      lastDotData   = dotData;
+      renderToCanvas(dotData);
+      applyZoom();
+      dotCountEl.textContent      = dotData.dots.length.toLocaleString();
+      exportSvgBtn.disabled       = isPhotoGrid;
+      exportPngBtn.disabled       = false;
+      emptyState.style.display    = 'none';
+      previewCanvas.style.display = 'block';
+      zoomBar.classList.add('visible');
+      processingOverlay.classList.remove('visible');
+    }));
+  }
+
+  /* ── Dot calculation ──────────────────────────────────── */
+  const SAMPLE_N = 5;
+
+  function calculateDots() {
+    const hctx = hiddenCanvas.getContext('2d');
+
+    const origW   = currentImage.naturalWidth;
+    const origH   = currentImage.naturalHeight;
+    const rotated = (rotationDeg === 90 || rotationDeg === 270);
+
+    const effW = rotated ? origH : origW;
+    const effH = rotated ? origW : origH;
+
+    let w, h;
+    if (targetW > 0 && targetH > 0) {
+      const scale = Math.min(targetW / effW, targetH / effH);
+      w = Math.round(effW * scale);
+      h = Math.round(effH * scale);
+    } else if (targetW > 0) {
+      w = targetW;
+      h = Math.round(effH * (targetW / effW));
+    } else if (targetH > 0) {
+      w = Math.round(effW * (targetH / effH));
+      h = targetH;
+    } else {
+      const MAX   = 900;
+      const scale = (effW > MAX || effH > MAX) ? Math.min(MAX / effW, MAX / effH) : 1;
+      w = Math.round(effW * scale);
+      h = Math.round(effH * scale);
+    }
+
+    hiddenCanvas.width  = w;
+    hiddenCanvas.height = h;
+
+    const s     = rotated ? w / origH : w / origW;
+    const drawW = origW * s;
+    const drawH = origH * s;
+    hctx.save();
+    hctx.translate(w / 2, h / 2);
+    hctx.rotate(rotationDeg * Math.PI / 180);
+    if (flipH) hctx.scale(-1,  1);
+    if (flipV) hctx.scale( 1, -1);
+    hctx.drawImage(currentImage, -drawW / 2, -drawH / 2, drawW, drawH);
+    hctx.restore();
+
+    const gs  = parseInt(gridSizeSlider.value);
+    const ext = extendCells * gs;
+    const outW = w + 2 * ext;
+    const outH = h + 2 * ext;
+
+    const blurPx  = Math.max(1, Math.round(gs / 2));
+    const blurCvs = document.createElement('canvas');
+    blurCvs.width = w; blurCvs.height = h;
+    const bctx    = blurCvs.getContext('2d');
+
+    const filters = [];
+    if (!isPhotoGrid)      filters.push(`blur(${blurPx}px)`);
+    if (brightness !== 100) filters.push(`brightness(${brightness}%)`);
+    if (contrast   !== 100) filters.push(`contrast(${contrast}%)`);
+    if (grayscale)          filters.push('grayscale(1)');
+    bctx.filter = filters.length ? filters.join(' ') : 'none';
+    bctx.drawImage(hiddenCanvas, 0, 0);
+
+    const imgData = bctx.getImageData(0, 0, w, h);
+    if (isPhotoGrid) {
+      applyPixelSort(imgData.data, w, h);
+      bctx.putImageData(imgData, 0, 0);
+    }
+    lastProcessedCanvas = blurCvs;
+    const px = imgData.data;
+    const fill    = parseFloat(dotFillSlider.value);
+    const radius  = (gs / 2) * fill;
+    const r2      = radius * radius;
+
+    const dots = [];
+    let row = 0;
+
+    for (let cy = gs * 0.5; cy < outH; cy += gs, row++) {
+      const rowOff = staggerRows && !isPhotoGrid && (row % 2 === 1) ? gs / 2 : 0;
+      for (let cx = gs * 0.5 + rowOff; cx < outW; cx += gs) {
+
+        const icx = Math.min(w - 1, Math.max(0, cx - ext));
+        const icy = Math.min(h - 1, Math.max(0, cy - ext));
+
+        /* flat: 3×3 centre average */
+        let cr = 0, cg = 0, cb = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const sx = Math.min(w - 1, Math.max(0, Math.round(icx) + dx));
+            const sy = Math.min(h - 1, Math.max(0, Math.round(icy) + dy));
+            const i  = (sy * w + sx) * 4;
+            cr += px[i]; cg += px[i + 1]; cb += px[i + 2];
+          }
+        }
+        cr = Math.round(cr / 9);
+        cg = Math.round(cg / 9);
+        cb = Math.round(cb / 9);
+
+        /* gradient: 5×5 sample grid, max-distance pair */
+        const samples = [];
+        for (let gi = 0; gi < SAMPLE_N; gi++) {
+          for (let gj = 0; gj < SAMPLE_N; gj++) {
+            const odx = (gi / (SAMPLE_N - 1) - 0.5) * 2 * radius;
+            const ody = (gj / (SAMPLE_N - 1) - 0.5) * 2 * radius;
+            if (odx * odx + ody * ody > r2) continue;
+            const sx = Math.min(w - 1, Math.max(0, Math.round(icx + odx)));
+            const sy = Math.min(h - 1, Math.max(0, Math.round(icy + ody)));
+            const i  = (sy * w + sx) * 4;
+            samples.push({ odx, ody, sr: px[i], sg: px[i + 1], sb: px[i + 2] });
+          }
+        }
+
+        let maxD2 = 0, ai = 0, bi = 0;
+        for (let a = 0; a < samples.length; a++) {
+          for (let b = a + 1; b < samples.length; b++) {
+            const dr = samples[a].sr - samples[b].sr;
+            const dg = samples[a].sg - samples[b].sg;
+            const db = samples[a].sb - samples[b].sb;
+            const d2 = dr * dr + dg * dg + db * db;
+            if (d2 > maxD2) { maxD2 = d2; ai = a; bi = b; }
+          }
+        }
+
+        // Default: gradient collapses to flat (degenerate uniform-color case)
+        let ddx = 1, ddy = 0;
+        let gr1 = cr, gg1 = cg, gb1 = cb;
+        let gr2 = cr, gg2 = cg, gb2 = cb;
+
+        if (maxD2 > 0) {
+          const A = samples[ai], B = samples[bi];
+          let dx = B.odx - A.odx, dy = B.ody - A.ody;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len > 0.001) { ddx = dx / len; ddy = dy / len; }
+          const projA = A.odx * ddx + A.ody * ddy;
+          if (projA <= 0) {
+            gr1 = A.sr; gg1 = A.sg; gb1 = A.sb;
+            gr2 = B.sr; gg2 = B.sg; gb2 = B.sb;
+          } else {
+            gr1 = B.sr; gg1 = B.sg; gb1 = B.sb;
+            gr2 = A.sr; gg2 = A.sg; gb2 = A.sb;
+          }
+        }
+
+        dots.push({
+          x: cx, y: cy, r: radius,
+          cr, cg, cb,
+          gx1: cx - ddx * radius, gy1: cy - ddy * radius,
+          gx2: cx + ddx * radius, gy2: cy + ddy * radius,
+          gr1, gg1, gb1, gr2, gg2, gb2,
+        });
+      }
+    }
+
+    return { dots, width: outW, height: outH };
+  }
+
+  /* ── Irregular grid helpers ──────────────────────────── */
+  function seededRNG(seed) {
+    let s = (seed ^ 0xdeadbeef) >>> 0;
+    return () => {
+      s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+      s ^= (s >>> 16);
+      s = Math.imul(s, 0x45d9f3b);
+      s ^= (s >>> 16);
+      return (s >>> 0) / 0xffffffff;
+    };
+  }
+
+  function irregularLines(total, gs, rng) {
+    const lines = [0];
+    let pos = 0;
+    while (pos < total - gs * 0.4) {
+      pos += gs * (0.5 + rng() * 1.5);
+      if (pos < total) lines.push(Math.round(pos));
+    }
+    lines.push(total);
+    return lines;
+  }
+
+  /* ── Pixel sort ───────────────────────────────────────── */
+  function pixelLuminance(r, g, b) { return 0.299 * r + 0.587 * g + 0.114 * b; }
+  function pixelHue(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+    if (d === 0) return 0;
+    let h = max === r ? ((g-b)/d+6)%6 : max === g ? (b-r)/d+2 : (r-g)/d+4;
+    return h / 6 * 255;
+  }
+  function pixelSaturation(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b), l = (max+min)/2;
+    if (max === min) return 0;
+    return (max-min) / (1 - Math.abs(2*l-1)) * 255;
+  }
+
+  function applyPixelSort(data, w, h) {
+    const getVal = pgSortBy === 'hue'        ? pixelHue
+                 : pgSortBy === 'saturation' ? pixelSaturation
+                 : pixelLuminance;
+    const isRow = pgSortDir === 'horizontal';
+    const outer = isRow ? h : w;
+    for (let i = 0; i < outer; i++) sortLine(data, w, h, i, isRow, getVal);
+  }
+
+  function sortLine(data, w, h, lineIdx, isRow, getVal) {
+    const len = isRow ? w : h;
+    let spanStart = -1;
+    const span = [];
+
+    const flush = () => {
+      if (spanStart === -1) return;
+      span.sort((a, b) => a.val - b.val);
+      for (let j = 0; j < span.length; j++) {
+        const pi = isRow
+          ? (lineIdx * w + spanStart + j) * 4
+          : ((spanStart + j) * w + lineIdx) * 4;
+        data[pi] = span[j].r; data[pi+1] = span[j].g; data[pi+2] = span[j].b;
+      }
+      spanStart = -1;
+      span.length = 0;
+    };
+
+    for (let i = 0; i < len; i++) {
+      const pi = isRow ? (lineIdx * w + i) * 4 : (i * w + lineIdx) * 4;
+      const r = data[pi], g = data[pi+1], b = data[pi+2];
+      const lum = pixelLuminance(r, g, b);
+      if (lum >= pgThreshLow && lum <= pgThreshHigh) {
+        if (spanStart === -1) spanStart = i;
+        span.push({ val: getVal(r, g, b), r, g, b });
+      } else {
+        flush();
+      }
+    }
+    flush();
+  }
+
+  /* ── Render ───────────────────────────────────────────── */
+  function drawDotShape(ctx, d) {
+    ctx.beginPath();
+    if (dotShape === 'square') {
+      ctx.rect(d.x - d.r, d.y - d.r, d.r * 2, d.r * 2);
+    } else if (dotShape === 'diamond') {
+      ctx.moveTo(d.x,       d.y - d.r);
+      ctx.lineTo(d.x + d.r, d.y);
+      ctx.lineTo(d.x,       d.y + d.r);
+      ctx.lineTo(d.x - d.r, d.y);
+      ctx.closePath();
+    } else {
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    }
+  }
+
+  function paintDots(ctx, dots, width, height, withBackground) {
+    if (withBackground && !bgTransparent) {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
+    }
+    for (const d of dots) {
+      if (isGradient) {
+        const grad = ctx.createLinearGradient(d.gx1, d.gy1, d.gx2, d.gy2);
+        grad.addColorStop(0, `rgb(${d.gr1},${d.gg1},${d.gb1})`);
+        grad.addColorStop(1, `rgb(${d.gr2},${d.gg2},${d.gb2})`);
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = `rgb(${d.cr},${d.cg},${d.cb})`;
+      }
+      drawDotShape(ctx, d);
+      ctx.fill();
+    }
+  }
+
+  function renderToCanvas(dotData) {
+    if (isPhotoGrid) { renderPhotoGrid(dotData); return; }
+    const ctx = previewCanvas.getContext('2d');
+    previewCanvas.width  = dotData.width;
+    previewCanvas.height = dotData.height;
+    paintDots(ctx, dotData.dots, dotData.width, dotData.height, true);
+  }
+
+  function renderPhotoGrid({ dots, width, height }, targetCanvas) {
+    const canvas = targetCanvas || previewCanvas;
+    const ctx    = canvas.getContext('2d');
+    canvas.width  = width;
+    canvas.height = height;
+
+    if (!bgTransparent) {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    const gs  = parseInt(gridSizeSlider.value);
+    const ext = extendCells * gs;
+
+    if (!lastProcessedCanvas) return;
+
+    // Read pixel data from the pixel-sorted canvas
+    const src   = lastProcessedCanvas;
+    const sctx  = src.getContext('2d');
+    const sd    = sctx.getImageData(0, 0, src.width, src.height).data;
+    const sw    = src.width;
+    const sh    = src.height;
+
+    function sampleColor(ox, oy) {
+      const cx = Math.max(0, Math.min(sw - 1, Math.round(ox - ext)));
+      const cy = Math.max(0, Math.min(sh - 1, Math.round(oy - ext)));
+      const i  = (cy * sw + cx) * 4;
+      return [sd[i], sd[i + 1], sd[i + 2]];
+    }
+
+    // Seeded irregular grid — same image + grid size always gives same layout
+    const seed   = width * 7919 + height * 6271 + gs * 31;
+    const rng    = seededRNG(seed);
+    const xLines = irregularLines(width,  gs, rng);
+    const yLines = irregularLines(height, gs, rng);
+
+    // Fill each cell with the color sampled from its centre
+    for (let row = 0; row < yLines.length - 1; row++) {
+      for (let col = 0; col < xLines.length - 1; col++) {
+        const x1 = xLines[col],  x2 = xLines[col + 1];
+        const y1 = yLines[row],  y2 = yLines[row + 1];
+        const [r, g, b] = sampleColor((x1 + x2) / 2, (y1 + y2) / 2);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      }
+    }
+
+    // Grid overlay
+    ctx.strokeStyle = `rgba(255,255,255,${photoGridLineOpacity})`;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    for (const x of xLines) { ctx.moveTo(x + 0.5, 0);     ctx.lineTo(x + 0.5, height); }
+    for (const y of yLines) { ctx.moveTo(0,     y + 0.5); ctx.lineTo(width,   y + 0.5); }
+    ctx.stroke();
+  }
+
+  /* ── SVG helpers ──────────────────────────────────────── */
+  function svgShape(d, fill) {
+    if (dotShape === 'square') {
+      const x = (d.x - d.r).toFixed(1), y = (d.y - d.r).toFixed(1), s = (d.r * 2).toFixed(2);
+      return `<rect x="${x}" y="${y}" width="${s}" height="${s}" fill="${fill}"/>`;
+    }
+    if (dotShape === 'diamond') {
+      const pts = [
+        `${d.x.toFixed(1)},${(d.y - d.r).toFixed(1)}`,
+        `${(d.x + d.r).toFixed(1)},${d.y.toFixed(1)}`,
+        `${d.x.toFixed(1)},${(d.y + d.r).toFixed(1)}`,
+        `${(d.x - d.r).toFixed(1)},${d.y.toFixed(1)}`,
+      ].join(' ');
+      return `<polygon points="${pts}" fill="${fill}"/>`;
+    }
+    return `<circle cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="${d.r.toFixed(2)}" fill="${fill}"/>`;
+  }
+
+  /* ── SVG export ───────────────────────────────────────── */
+  exportSvgBtn.addEventListener('click', () => {
+    if (isPhotoGrid || !lastDotData) return;
+    const { dots, width, height } = lastDotData;
+
+    if (isGradient && dots.length > 20000) {
+      const ok = confirm(`Gradient SVG will contain ${dots.length.toLocaleString()} gradient definitions and may be very large. Continue?`);
+      if (!ok) return;
+    }
+
+    const bgRect = bgTransparent ? '' : `<rect width="${width}" height="${height}" fill="${bgColor}"/>`;
+    let svg;
+
+    if (isGradient) {
+      const defs = dots.map((d, i) =>
+        `<linearGradient id="g${i}" x1="${d.gx1.toFixed(2)}" y1="${d.gy1.toFixed(2)}"` +
+        ` x2="${d.gx2.toFixed(2)}" y2="${d.gy2.toFixed(2)}" gradientUnits="userSpaceOnUse">` +
+        `<stop offset="0%" stop-color="rgb(${d.gr1},${d.gg1},${d.gb1})"/>` +
+        `<stop offset="100%" stop-color="rgb(${d.gr2},${d.gg2},${d.gb2})"/>` +
+        `</linearGradient>`
+      ).join('');
+      const shapes = dots.map((d, i) => svgShape(d, `url(#g${i})`)).join('');
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+            bgRect + `<defs>${defs}</defs>` + shapes + `</svg>`;
+    } else {
+      const shapes = dots.map(d => svgShape(d, `rgb(${d.cr},${d.cg},${d.cb})`)).join('');
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+            bgRect + shapes + `</svg>`;
+    }
+
+    triggerDownload(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'dot-matrix.svg');
+  });
+
+  /* ── PNG export ───────────────────────────────────────── */
+  exportPngBtn.addEventListener('click', () => {
+    if (!lastDotData) return;
+    const { dots, width, height } = lastDotData;
+    const off = document.createElement('canvas');
+    if (isPhotoGrid) {
+      renderPhotoGrid(lastDotData, off);
+    } else {
+      off.width = width; off.height = height;
+      paintDots(off.getContext('2d'), dots, width, height, true);
+    }
+    off.toBlob(blob => triggerDownload(blob, 'dot-matrix.png'), 'image/png');
+  });
+
+  /* ── Util ─────────────────────────────────────────────── */
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 200);
+  }
+</script>
+</body>
+</html>
